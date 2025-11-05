@@ -1,0 +1,30 @@
+{
+  "name": "Google Apps Script",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:0-20",
+  "postCreateCommand": "npm install -g @google/clasp",
+
+  "remoteEnv": {
+    "GIT_SSH_COMMAND": "ssh -o 'IgnoreUnknown UseKeychain'"
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.gitconfig,target=/home/vscode/.gitconfig,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "files.associations": {
+          "*.gs": "javascript"
+        },
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "PKief.material-icon-theme"
+      ]
+    }
+  }
+}
