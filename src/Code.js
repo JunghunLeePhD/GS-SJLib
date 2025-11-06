@@ -39,14 +39,14 @@ function saveHtmlToDriveInFolder() {
   // Check for weekdays (Mon-Fri, 1-5)
   if (dayOfWeek >= 1 && dayOfWeek <= 5) {
     // 9:00 AM (9) to 10:00 PM (22)
-    if (hourOfDay >= 9 && hourOfDay <= 22) {
+    if (hourOfDay >= 9 && hourOfDay <= 21) {
       shouldRun = true;
     }
   }
   // Check for weekends (Sat-Sun, 6-7)
   else if (dayOfWeek == 6 || dayOfWeek == 7) {
     // 9:00 AM (9) to 6:00 PM (18)
-    if (hourOfDay >= 9 && hourOfDay <= 18) {
+    if (hourOfDay >= 9 && hourOfDay <= 17) {
       shouldRun = true;
     }
   }
