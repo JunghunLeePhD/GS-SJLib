@@ -76,6 +76,19 @@ This workflow assumes you are using `clasp` and the Dev Container environment 
     clasp create --title "Sejong Library Scraper" --rootDir ./src
     ```
 
+    **To Link an Existing Project**
+
+    1.  Go to your Apps Script project's **Settings** ⚙️ and copy the **Script ID**.
+    2.  Run `clasp clone` to pull the code:
+
+        ```bash
+        SCRIPT_ID="YOUR_SCRIPT_ID"
+        ```
+
+        ```bash
+        clasp clone $SCRIPT_ID --rootDir ./src
+        ```
+
 4.  **Set Configuration:**
 
     - Go to the Apps Script project in your browser (you can run `clasp open`).
