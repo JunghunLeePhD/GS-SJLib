@@ -45,6 +45,23 @@ function main() {
       parseAndSaveData(fileId, sheet, doneFolder);
     });
 
+    // 5. Sort the sheet by Timestamp (Column 1)
+    // Check if there is data to sort (more than just the header row)
+    if (sheet.getLastRow() > 1) {
+      const dataRange = sheet.getRange(
+        2, // Start row (skip header at row 1)
+        1, // Start column
+        sheet.getLastRow() - 1, // Number of rows (all data, minus header)
+        sheet.getLastColumn() // Number of columns
+      );
+
+      // Sort by the first column (Timestamp) in ascending order
+      dataRange.sort({ column: 1, ascending: true });
+      Logger.log("Successfully sorted the sheet by Timestamp (Column 1).");
+    } else {
+      Logger.log("No data to sort (sheet is empty or has header only).");
+    }
+
     Logger.log("--- All valid files have been parsed and saved. ---");
   } catch (e) {
     Logger.log("FATAL ERROR in main: " + e.message);
