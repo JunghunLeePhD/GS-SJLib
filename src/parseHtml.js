@@ -3,44 +3,85 @@
  * You can run this function from the Apps Script editor.
  */
 function main() {
-  // !!! REPLACE THIS with the ID of your folder
-  const folderId = "YOUR_FOLDER_ID_HERE";
+  // Get the Folder ID from Script Properties (Secrets)
+  const folderId =
+    PropertiesService.getScriptProperties().getProperty("FOLDER_ID");
 
-  // 1. Get the target Spreadsheet and Sheet
-  // This will find or create 'SJLib' in the folderId
-  const spreadsheet = getOrCreateSpreadsheet(folderId);
-  if (!spreadsheet) {
-    Logger.log("Could not find or create spreadsheet. Exiting.");
+  // Stop if the secret is not set
+  if (!folderId) {
+    Logger.log("ERROR: 'FOLDER_ID' not set in Script Properties.");
+    Logger.log(
+      "Please run the 'setFolderId' function once from the editor to set it."
+    );
     return;
   }
-  // This will find or create the 'Complexity' sheet
-  const sheet = getOrCreateSheet(spreadsheet);
 
-  // 2. Process folder to find valid files
-  const validFileIds = processHtmlFolder(folderId);
+  try {
+    const sourceFolder = DriveApp.getFolderById(folderId);
 
-  Logger.log(
-    `Found ${validFileIds.length} valid files. Now parsing and saving...`
+    // 1. Get the target Spreadsheet and Sheet
+    // This will find or create 'SJLib' in the sourceFolder
+    const spreadsheet = getOrCreateSpreadsheet(sourceFolder);
+    if (!spreadsheet) {
+      Logger.log("Could not find or create spreadsheet. Exiting.");
+      return;
+    }
+    // This will find or create the 'Complexity' sheet
+    const sheet = getOrCreateSheet(spreadsheet);
+
+    // 2. Get helper folders (Done & Error) inside the source folder
+    const doneFolder = getOrCreateSubFolder(sourceFolder, "Done");
+    const errorFolder = getOrCreateSubFolder(sourceFolder, "Error");
+
+    // 3. Process folder to find valid files
+    const validFileIds = processHtmlFolder(sourceFolder, errorFolder);
+
+    Logger.log(
+      `Found ${validFileIds.length} valid files. Now parsing and saving...`
+    );
+
+    // 4. Parse each valid file and save data to the sheet
+    validFileIds.forEach((fileId) => {
+      parseAndSaveData(fileId, sheet, doneFolder);
+    });
+
+    Logger.log("--- All valid files have been parsed and saved. ---");
+  } catch (e) {
+    Logger.log("FATAL ERROR in main: " + e.message);
+    Logger.log("Stack: " + e.stack);
+  }
+}
+
+/**
+ * !!! RUN THIS FUNCTION ONCE !!!
+ * A helper function to set the secret FOLDER_ID in Script Properties.
+ * When you run this, it will prompt you for the folder ID.
+ */
+function setFolderId() {
+  const folderId = Browser.inputBox(
+    "Set Folder ID",
+    "Please enter the Google Drive Folder ID:",
+    Browser.Buttons.OK_CANCEL
   );
 
-  // 3. Parse each valid file and save data to the sheet
-  validFileIds.forEach((fileId) => {
-    parseAndSaveData(fileId, sheet);
-  });
-
-  Logger.log("--- All valid files have been parsed and saved. ---");
+  if (folderId && folderId !== "cancel") {
+    PropertiesService.getScriptProperties().setProperty("FOLDER_ID", folderId);
+    Logger.log("Folder ID has been set successfully.");
+    Logger.log("You can now run the 'main' function.");
+  } else {
+    Logger.log("Folder ID was not set.");
+  }
 }
 
 /**
  * Finds 'SJLib' spreadsheet in a folder, or creates it there.
- * @param {string} folderId The ID of the folder to search in.
+ * @param {DriveApp.Folder} parentFolder The Folder object to search in.
  * @return {Spreadsheet} The Spreadsheet object, or null on error.
  */
-function getOrCreateSpreadsheet(folderId) {
+function getOrCreateSpreadsheet(parentFolder) {
   const ssName = "SJLib";
   try {
-    const folder = DriveApp.getFolderById(folderId);
-    const files = folder.getFilesByName(ssName);
+    const files = parentFolder.getFilesByName(ssName);
 
     // Check if a spreadsheet with this name already exists in the folder
     while (files.hasNext()) {
@@ -57,11 +98,14 @@ function getOrCreateSpreadsheet(folderId) {
     const ssFile = DriveApp.getFileById(ss.getId());
 
     // Move the new spreadsheet to the target folder
-    folder.addFile(ssFile);
+    parentFolder.addFile(ssFile);
     DriveApp.getRootFolder().removeFile(ssFile);
 
     Logger.log(
-      "Created new spreadsheet '" + ssName + "' in folder: " + folder.getName()
+      "Created new spreadsheet '" +
+        ssName +
+        "' in folder: " +
+        parentFolder.getName()
     );
     return ss;
   } catch (e) {
@@ -114,11 +158,13 @@ function getOrCreateSheet(spreadsheet) {
  * Parses a single valid HTML file and appends its data to the sheet.
  * @param {string} fileId The Google Drive ID of the file to parse.
  * @param {Sheet} sheet The Google Sheet object to append data to.
+ * @param {DriveApp.Folder} doneFolder The Folder to move the file to after success.
  */
-function parseAndSaveData(fileId, sheet) {
+function parseAndSaveData(fileId, sheet, doneFolder) {
+  let file; // Declare file here to access it
   try {
     // --- Get Data ---
-    const file = DriveApp.getFileById(fileId);
+    file = DriveApp.getFileById(fileId);
     const fileName = file.getName();
     const htmlContent = file.getBlob().getDataAsString("UTF-8");
 
@@ -160,6 +206,12 @@ function parseAndSaveData(fileId, sheet) {
           " rows from file: " +
           fileName
       );
+
+      // --- Move File to "Done" folder ---
+      if (file && doneFolder) {
+        file.moveTo(doneFolder);
+        Logger.log("Moved file '" + fileName + "' to Done folder.");
+      }
     }
   } catch (e) {
     Logger.log(
@@ -172,15 +224,13 @@ function parseAndSaveData(fileId, sheet) {
 
 /**
  * Processes all HTML files in a folder, validates them, and moves bad files.
- * @param {String} folderId The Google Drive ID of the folder to process.
+ * @param {DriveApp.Folder} sourceFolder The Google Drive Folder to process.
+ *A* @param {DriveApp.Folder} errorFolder The Folder to move bad files to.
  * @returns {String[]} An array of file IDs that passed validation.
  */
-function processHtmlFolder(folderId) {
+function processHtmlFolder(sourceFolder, errorFolder) {
   const validFileIds = [];
   try {
-    const sourceFolder = DriveApp.getFolderById(folderId);
-    const doneFolder = getOrCreateSubFolder(sourceFolder, "Done");
-    const errorFolder = getOrCreateSubFolder(sourceFolder, "Error");
     const files = sourceFolder.getFiles();
 
     Logger.log("Starting processing for folder: " + sourceFolder.getName());
@@ -195,12 +245,12 @@ function processHtmlFolder(folderId) {
         Logger.log("Skipping (not HTML): " + fileName);
         continue;
       }
+
       Logger.log("Processing file: " + fileName);
 
       let htmlContent;
       try {
         htmlContent = file.getBlob().getDataAsString("UTF-8");
-        file.moveTo(doneFolder);
       } catch (e) {
         Logger.log(
           "  > FAILED: Could not read file content. Moving to Error folder."
@@ -219,7 +269,7 @@ function processHtmlFolder(folderId) {
 
       // --- Decision: Pass or Fail ---
       if (isNameValid && isContentValid) {
-        Logger.log("  > SUCCESS: File is valid. ID: " + fileId);
+        Logger.log("  > SUCCESS: File is- valid. ID: " + fileId);
         validFileIds.push(fileId); // Add to the array
       } else {
         Logger.log("  > FAILED: Moving to Error folder.");
