@@ -30,7 +30,8 @@ function processHtmlFolder(folderId) {
   try {
     // --- Setup ---
     const sourceFolder = DriveApp.getFolderById(folderId);
-    const errorFolder = getOrCreateErrorFolder();
+    const doneFolder = getOrCreateSubFolder(sourceFolder, "Done");
+    const errorFolder = getOrCreateSubFolder(sourceFolder, "Error");
     const files = sourceFolder.getFiles();
     // (Declaration was moved up)
 
@@ -47,12 +48,12 @@ function processHtmlFolder(folderId) {
         Logger.log("Skipping (not HTML): " + fileName);
         continue;
       }
-
       Logger.log("Processing file: " + fileName);
 
       let htmlContent;
       try {
         htmlContent = file.getBlob().getDataAsString("UTF-8");
+        file.moveTo(doneFolder);
       } catch (e) {
         Logger.log(
           "  > FAILED: Could not read file content. Moving to Error folder."
@@ -189,15 +190,23 @@ function parseTrafficFromHtmlContent(htmlContent) {
 }
 
 /**
- * Finds a folder named "Error" in the root of your Drive, or creates it.
- * @return {DriveApp.Folder} The "Error" folder.
+ * Finds a folder by name inside a parent folder, or creates it.
+ * @param {DriveApp.Folder} parentFolder The folder to search/create in.
+ * @param {string} folderName The name of the subfolder to find or create.
+ * @return {DriveApp.Folder} The Folder object.
  */
-function getOrCreateErrorFolder() {
-  const folderName = "Error";
-  const folders = DriveApp.getFoldersByName(folderName);
+function getOrCreateSubFolder(parentFolder, folderName) {
+  const folders = parentFolder.getFoldersByName(folderName);
   if (folders.hasNext()) {
     return folders.next();
   } else {
-    return DriveApp.createFolder(folderName);
+    Logger.log(
+      "Creating folder '" +
+        folderName +
+        "' inside '" +
+        parentFolder.getName() +
+        "'."
+    );
+    return parentFolder.createFolder(folderName);
   }
 }
