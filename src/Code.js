@@ -37,7 +37,7 @@ function saveHtmlToDriveInFolder() {
   var shouldRun = false;
 
   // Check for weekdays (Mon-Fri, 1-5)
-  if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+  if (dayOfWeek >= 2 && dayOfWeek <= 5) {
     // 9:00 AM (9) to 10:00 PM (22)
     if (hourOfDay >= 9 && hourOfDay <= 21) {
       shouldRun = true;
