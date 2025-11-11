@@ -85,14 +85,24 @@ class Failure {
  */
 class Complexity {
   /**
+   * @param {string} timestamp
    * @param {string} floor
    * @param {string} location
    * @param {string} status
    */
-  constructor(floor, location, status) {
+  constructor(timestamp, floor, location, status) {
+    this.timestamp = timestamp;
     this.floor = floor;
     this.location = location;
     this.status = status;
+  }
+
+  /**
+   * Helper to get the floor.
+   * @returns {string}
+   */
+  getTimestamp() {
+    return this.timestamp;
   }
 
   /**
@@ -125,12 +135,19 @@ class Complexity {
  */
 class Response {
   /**
+   * @param {string} timestamp
    * @param {string} contentText
    * @param {number} responseCode
    */
-  constructor(contentText, responseCode) {
+  constructor(timestamp, contentText, responseCode) {
+    this.timestamp = timestamp;
     this.contentText = contentText;
     this.responseCode = responseCode;
+  }
+
+  /** @returns {string} */
+  getTimestamp() {
+    return this.timestamp;
   }
 
   /** @returns {string} */
@@ -209,8 +226,13 @@ class ScraperAPI {
           muteHttpExceptions: true,
         }
       );
+      const { timestamp } = ScraperAPI.getTime();
       return new Success(
-        new Response(response.getContentText(), response.getResponseCode())
+        new Response(
+          timestamp,
+          response.getContentText(),
+          response.getResponseCode()
+        )
       );
     } catch (e) {
       return new Failure(e); // Pass the whole error
@@ -284,8 +306,13 @@ function main() {
     .bind((response) => response.getComplexities());
 
   if (complexities instanceof Success) {
-    for (let { floor, location, status } of complexities.getValue()) {
-      Logger.log(`Success!: ${floor}, ${location}, ${status}`);
+    for (let {
+      timestamp,
+      floor,
+      location,
+      status,
+    } of complexities.getValue()) {
+      Logger.log(`Success!: ${timestamp}, ${floor}, ${location}, ${status}`);
     }
   }
 
