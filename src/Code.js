@@ -128,6 +128,43 @@ class Complexity {
   getStatus() {
     return this.status;
   }
+
+  /**
+   * Parses the contents and returns complexity list in a Success or Failure
+   * @param {Response} response
+   * @returns {Success<Complexity[]>|Failure}
+   */
+  static fromResponse(response) {
+    const contentText = response.getContentText();
+
+    if (contentText) {
+      const results = [];
+
+      const floorRegex =
+        /<div class="floor_info">\s*<div class="f_num">([\w\d]+)<\/div>\s*<\/div>\s*<div class="floor_img">([\s\S]*?)<\/div>/g;
+      const locationRegex =
+        /<p class="map_pin"[\s\S]*?<span class='situ\d'>(.*?)<\/span>(.*?)<\/p>/g;
+
+      let floorMatch;
+      while ((floorMatch = floorRegex.exec(contentText)) !== null) {
+        const floorNum = floorMatch[1].trim();
+        const imgContent = floorMatch[2];
+
+        let locMatch;
+        while ((locMatch = locationRegex.exec(imgContent)) !== null) {
+          const status = locMatch[1].trim();
+          const location = locMatch[2].trim();
+          results.push(new Complexity(floorNum, location, status));
+        }
+      }
+
+      if (results.length > 0) {
+        return new Success(results);
+      }
+      return new Failure("No complexity in the content");
+    }
+    return new Failure("No contexts in the response");
+  }
 }
 
 /**
@@ -172,35 +209,6 @@ class Response {
     }
     return new Failure("Response code is not 2XX");
   }
-
-  /**
-   * Parses the contents and returns complexity list in a Success or Failure
-   * @returns {Success<Complexity[]>|Failure}
-   */
-  getComplexities() {
-    const results = [];
-    const floorRegex =
-      /<div class="floor_info">\s*<div class="f_num">([\w\d]+)<\/div>\s*<\/div>\s*<div class="floor_img">([\s\S]*?)<\/div>/g;
-    const locationRegex =
-      /<p class="map_pin"[\s\S]*?<span class='situ\d'>(.*?)<\/span>(.*?)<\/p>/g;
-
-    let floorMatch;
-    while ((floorMatch = floorRegex.exec(this.getContentText())) !== null) {
-      const floorNum = floorMatch[1].trim();
-      const imgContent = floorMatch[2];
-
-      let locMatch;
-      while ((locMatch = locationRegex.exec(imgContent)) !== null) {
-        const status = locMatch[1].trim();
-        const location = locMatch[2].trim();
-        results.push(new Complexity(floorNum, location, status));
-      }
-    }
-    if (results.length > 0) {
-      return new Success(results);
-    }
-    return new Failure("No complexity in the content");
-  }
 }
 
 /**
@@ -226,7 +234,7 @@ class ScraperAPI {
           muteHttpExceptions: true,
         }
       );
-      const { timestamp } = ScraperAPI.getTime();
+      const { timestamp } = ScraperAPI.getTime("Asia/Seoul");
       return new Success(
         new Response(
           timestamp,
@@ -303,7 +311,7 @@ function main() {
       scrapper.fetch("https://lib.sejong.go.kr/main/site/sensor/traffic.do")
     )
     .bind((response) => response.isValidCode())
-    .bind((response) => response.getComplexities());
+    .bind((response) => Complexity.fromResponse(response));
 
   if (complexities instanceof Success) {
     for (let {
