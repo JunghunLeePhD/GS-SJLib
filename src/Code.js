@@ -370,3 +370,107 @@ class Complexity {
     return new Failure("No complexity data found in the content");
   }
 }
+
+class MySheet {
+  constructor(fileId, sheet) {
+    this.fileId = fileId;
+    this.sheet = sheet;
+  }
+
+  getFileId() {
+    return this.fileId;
+  }
+
+  getSheet() {
+    return this.sheet;
+  }
+
+  static fromFileName(fileName, sheet) {
+    const rootFolder = DriveApp.getRootFolder();
+    const files = rootFolder.getFilesByName(fileName);
+    while (files.hasNext()) {
+      const file = files.next();
+      if (file.getMimeType() === MimeType.GOOGLE_SHEETS) {
+        Logger.log(`Found existing Spreadsheet: '${fileName}' in root folder.`);
+        const fileId = SpreadsheetApp.openById(file.getId());
+        return new MySheet(fileId, sheet);
+      }
+    }
+
+    Logger.log(`Spreadsheet '${fileName}' not found in root. Creating...`);
+    const file = SpreadsheetApp.create(fileName);
+    const fileId = file.getId();
+    return new MySheet(fileId, sheet);
+  }
+
+  static fromSheetName(fileId, sheetName) {
+    const sheet = fileId.getSheetByName(sheetName);
+
+    if (!sheet) {
+      Logger.log("Sheet '" + sheetName + "' not found. Creating...");
+      sheet = fileId.insertSheet(sheetName);
+      sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+      Logger.log("Created new sheet and added header.");
+    }
+    if (sheet.getLastRow() === 0) {
+      Logger.log(
+        "Sheet '" + sheetName + "' exists but is empty. Adding header."
+      );
+      sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+    }
+    Logger.log("Found existing sheet: " + sheetName);
+
+    if (sheetName !== "Sheet1") {
+      const defaultSheet = fileId.getSheetByName("Sheet1");
+      if (defaultSheet) {
+        try {
+          fileId.deleteSheet(defaultSheet);
+          Logger.log("Removed default 'Sheet1'.");
+        } catch (e) {
+          return new Failure(e);
+        }
+      }
+    }
+
+    return new MySheet(fileId, sheet);
+  }
+
+  /**
+   * Appends the complexity data to the sheet.
+   * @param {Complexity[]} complexities
+   */
+  saveFrom(complexities) {
+    const fileName = this.fileName;
+
+    try {
+      const rowsToAdd = complexities.map((complexity) => {
+        return [
+          complexity.getTimestamp(),
+          complexity.getFloor(),
+          complexity.getLocation(),
+          complexity.getStatus(),
+        ];
+      });
+
+      sheet
+        .getRange(
+          sheet.getLastRow() + 1, // Start row (next empty row)
+          1, // Start column
+          rowsToAdd.length, // Number of rows
+          rowsToAdd[0].length // Number of columns
+        )
+        .setValues(rowsToAdd);
+
+      Logger.log(
+        "Successfully saved " +
+          rowsToAdd.length +
+          " rows from file: " +
+          fileName
+      );
+    } catch (e) {
+      return new Failure(
+        "Error in parseAndSaveData for file " + fileName + ": " + e.message
+      );
+    }
+  }
+}
