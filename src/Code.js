@@ -5,6 +5,7 @@ function main() {
   const apikey =
     PropertiesService.getScriptProperties().getProperty("SCRAPERAPI_API_KEY");
 
+  // This part is fine
   const complexities = ScraperAPI.fromApiKey(
     "https://lib.sejong.go.kr/main/site/sensor/traffic.do",
     apikey
@@ -14,22 +15,31 @@ function main() {
     .bind((response) => response.hasValidCode())
     .bind((response) => Complexity.fromResponse(response));
 
-  if (complexities instanceof Success) {
-    Logger.log("Operation Succeeded:");
-    for (let {
-      timestamp,
-      floor,
-      location,
-      status,
-    } of complexities.getValue()) {
-      Logger.log(
-        `  - Timestamp: ${timestamp}, Floor: ${floor}, Location: ${location}, Status: ${status}`
-      );
+  const mySheetResult = MySheet.fromNames("SJCityLib", "Complexity");
+
+  const saveResult = mySheetResult.bind((mySheet) =>
+    mySheet.saveFrom(complexities)
+  );
+
+  if (saveResult instanceof Success) {
+    Logger.log("Operation Succeeded (including save):");
+
+    if (complexities instanceof Success) {
+      for (let {
+        timestamp,
+        floor,
+        location,
+        status,
+      } of complexities.getValue()) {
+        Logger.log(
+          `  - Timestamp: ${timestamp}, Floor: ${floor}, Location: ${location}, Status: ${status}`
+        );
+      }
     }
   }
 
-  if (complexities instanceof Failure) {
-    Logger.log(`Operation failed: ${complexities.getMessage()}`);
+  if (saveResult instanceof Failure) {
+    Logger.log(`Operation failed: ${saveResult.getMessage()}`);
   }
 }
 
@@ -385,64 +395,129 @@ class MySheet {
     return this.sheet;
   }
 
-  static fromFileName(fileName, sheet) {
-    const rootFolder = DriveApp.getRootFolder();
-    const files = rootFolder.getFilesByName(fileName);
-    while (files.hasNext()) {
-      const file = files.next();
-      if (file.getMimeType() === MimeType.GOOGLE_SHEETS) {
-        Logger.log(`Found existing Spreadsheet: '${fileName}' in root folder.`);
-        const fileId = SpreadsheetApp.openById(file.getId());
-        return new MySheet(fileId, sheet);
-      }
+  /**
+   *
+   * @param {*} fileName
+   * @param {*} sheetName
+   * @returns {Success<MySheet>|Failure}
+   */
+  static fromNames(fileName, sheetName) {
+    // **FIX:** Properly chain the monadic results
+
+    // 1. Get the file result
+    const fileResult = MySheet.fromFileName(fileName, "");
+
+    // 2. If fileResult is a Failure, stop and return it.
+    if (fileResult instanceof Failure) {
+      return fileResult;
     }
 
-    Logger.log(`Spreadsheet '${fileName}' not found in root. Creating...`);
-    const file = SpreadsheetApp.create(fileName);
-    const fileId = file.getId();
-    return new MySheet(fileId, sheet);
+    // 3. We have Success, so get the Spreadsheet object
+    // .getFileId() here returns this.fileId, which we set as the Spreadsheet object
+    const spreadsheet = fileResult.getValue().getFileId();
+
+    // 4. Now get the sheet result
+    const sheetResult = MySheet.fromSheetName(spreadsheet, sheetName);
+
+    // 5. Return the final result (which is Success<MySheet> or Failure)
+    return sheetResult;
   }
+  /**
+   *
+   * @param {string} fileName
+   * @returns {Success<MySheet>|Failure}
+   */
+  static fromFileName(fileName, sheet) {
+    try {
+      const rootFolder = DriveApp.getRootFolder();
+      const files = rootFolder.getFilesByName(fileName);
 
-  static fromSheetName(fileId, sheetName) {
-    const sheet = fileId.getSheetByName(sheetName);
-
-    if (!sheet) {
-      Logger.log("Sheet '" + sheetName + "' not found. Creating...");
-      sheet = fileId.insertSheet(sheetName);
-      sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
-      Logger.log("Created new sheet and added header.");
-    }
-    if (sheet.getLastRow() === 0) {
-      Logger.log(
-        "Sheet '" + sheetName + "' exists but is empty. Adding header."
-      );
-      sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
-    }
-    Logger.log("Found existing sheet: " + sheetName);
-
-    if (sheetName !== "Sheet1") {
-      const defaultSheet = fileId.getSheetByName("Sheet1");
-      if (defaultSheet) {
-        try {
-          fileId.deleteSheet(defaultSheet);
-          Logger.log("Removed default 'Sheet1'.");
-        } catch (e) {
-          return new Failure(e);
+      while (files.hasNext()) {
+        const file = files.next();
+        if (file.getMimeType() === MimeType.GOOGLE_SHEETS) {
+          Logger.log(
+            `Found existing Spreadsheet: '${fileName}' in root folder.`
+          );
+          // Get the Spreadsheet object
+          const spreadsheet = SpreadsheetApp.openById(file.getId());
+          return new Success(new MySheet(spreadsheet, sheet));
         }
       }
-    }
 
-    return new MySheet(fileId, sheet);
+      Logger.log(`Spreadsheet '${fileName}' not found in root. Creating...`);
+
+      // Create returns the Spreadsheet object
+      const file = SpreadsheetApp.create(fileName);
+
+      // **FIX:** Pass the Spreadsheet object 'file', not 'file.getId()'
+      return new Success(new MySheet(file, sheet));
+    } catch (e) {
+      return new Failure(`Error in 'getFileId': ${e}`);
+    }
+  }
+
+  /**
+   *
+   * @param {string} sheetName
+   * @returns {Success<MySheet>|Failure}
+   */
+  static fromSheetName(fileId, sheetName) {
+    try {
+      const sheet = fileId.getSheetByName(sheetName);
+
+      if (!sheet) {
+        Logger.log("Sheet '" + sheetName + "' not found. Creating...");
+        sheet = fileId.insertSheet(sheetName);
+        sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+        Logger.log("Created new sheet and added header.");
+      }
+
+      if (sheet.getLastRow() === 0) {
+        Logger.log(
+          "Sheet '" + sheetName + "' exists but is empty. Adding header."
+        );
+        sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+      }
+
+      Logger.log("Found existing sheet: " + sheetName);
+
+      if (sheetName !== "Sheet1") {
+        const defaultSheet = fileId.getSheetByName("Sheet1");
+        if (defaultSheet) {
+          fileId.deleteSheet(defaultSheet);
+          Logger.log("Removed default 'Sheet1'.");
+        }
+      }
+      return new Success(new MySheet(fileId, sheet));
+    } catch (e) {
+      return new Failure(`Error in 'getSheet' ${e}`);
+    }
   }
 
   /**
    * Appends the complexity data to the sheet.
-   * @param {Complexity[]} complexities
+   * @param {Success<Complexity[]>|Failure} complexityResult
+   * @returns {Success<MySheet>|Failure}
    */
-  saveFrom(complexities) {
-    const fileName = this.fileName;
-
+  saveFrom(complexityResult) {
     try {
+      // **FIX 1: Check if the *input* was a failure**
+      if (complexityResult instanceof Failure) {
+        Logger.log(`Skipping save: ${complexityResult.getMessage()}`);
+        return new Failure(complexityResult.getError()); // Propagate the error
+      }
+
+      // **FIX 2: Get the *value* (the array) from the Success object**
+      const complexities = complexityResult.getValue();
+
+      if (!complexities || complexities.length === 0) {
+        Logger.log("No complexity data to save.");
+        return new Success(this); // Successful, but nothing to do
+      }
+
+      const sheet = this.getSheet(); // this.sheet is a Sheet object
+
+      // **FIX 3: Now map the 'complexities' array**
       const rowsToAdd = complexities.map((complexity) => {
         return [
           complexity.getTimestamp(),
@@ -451,6 +526,11 @@ class MySheet {
           complexity.getStatus(),
         ];
       });
+
+      if (rowsToAdd.length === 0) {
+        Logger.log("No rows to add after mapping.");
+        return new Success(this);
+      }
 
       sheet
         .getRange(
@@ -461,16 +541,11 @@ class MySheet {
         )
         .setValues(rowsToAdd);
 
-      Logger.log(
-        "Successfully saved " +
-          rowsToAdd.length +
-          " rows from file: " +
-          fileName
-      );
+      Logger.log("Successfully saved " + rowsToAdd.length + " rows ");
+      // **FIX 4: Return a Success object for consistency**
+      return new Success(this);
     } catch (e) {
-      return new Failure(
-        "Error in parseAndSaveData for file " + fileName + ": " + e.message
-      );
+      return new Failure(`Error in 'saveFrom': ${e.message}`);
     }
   }
 }
