@@ -382,13 +382,15 @@ class Complexity {
 }
 
 class MySheet {
-  constructor(fileId, sheet) {
-    this.fileId = fileId;
+  // **IMPROVEMENT 1: Renamed 'fileId' to 'spreadsheet' for clarity**
+  constructor(spreadsheet, sheet) {
+    this.spreadsheet = spreadsheet;
     this.sheet = sheet;
   }
 
-  getFileId() {
-    return this.fileId;
+  // **IMPROVEMENT 2: Renamed getter**
+  getSpreadsheet() {
+    return this.spreadsheet;
   }
 
   getSheet() {
@@ -396,32 +398,20 @@ class MySheet {
   }
 
   /**
-   *
+   * **IMPROVEMENT 3: Refactored 'fromNames' to use .bind()**
+   * This is much cleaner and perfectly follows your monadic pattern.
    * @param {*} fileName
    * @param {*} sheetName
    * @returns {Success<MySheet>|Failure}
    */
   static fromNames(fileName, sheetName) {
-    // **FIX:** Properly chain the monadic results
-
-    // 1. Get the file result
-    const fileResult = MySheet.fromFileName(fileName, "");
-
-    // 2. If fileResult is a Failure, stop and return it.
-    if (fileResult instanceof Failure) {
-      return fileResult;
-    }
-
-    // 3. We have Success, so get the Spreadsheet object
-    // .getFileId() here returns this.fileId, which we set as the Spreadsheet object
-    const spreadsheet = fileResult.getValue().getFileId();
-
-    // 4. Now get the sheet result
-    const sheetResult = MySheet.fromSheetName(spreadsheet, sheetName);
-
-    // 5. Return the final result (which is Success<MySheet> or Failure)
-    return sheetResult;
+    return MySheet.fromFileName(fileName, "").bind((mySheet) => {
+      // The value from the Success is 'mySheet'.
+      // We get its spreadsheet and pass it to the next step in the chain.
+      return MySheet.fromSheetName(mySheet.getSpreadsheet(), sheetName);
+    });
   }
+
   /**
    *
    * @param {string} fileName
@@ -438,18 +428,16 @@ class MySheet {
           Logger.log(
             `Found existing Spreadsheet: '${fileName}' in root folder.`
           );
-          // Get the Spreadsheet object
           const spreadsheet = SpreadsheetApp.openById(file.getId());
+          // **Pass the Spreadsheet object**
           return new Success(new MySheet(spreadsheet, sheet));
         }
       }
 
       Logger.log(`Spreadsheet '${fileName}' not found in root. Creating...`);
-
-      // Create returns the Spreadsheet object
       const file = SpreadsheetApp.create(fileName);
 
-      // **FIX:** Pass the Spreadsheet object 'file', not 'file.getId()'
+      // **Pass the Spreadsheet object**
       return new Success(new MySheet(file, sheet));
     } catch (e) {
       return new Failure(`Error in 'getFileId': ${e}`);
@@ -457,43 +445,45 @@ class MySheet {
   }
 
   /**
-   *
+   * **IMPROVEMENT 4: Simplified header logic**
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet
    * @param {string} sheetName
    * @returns {Success<MySheet>|Failure}
    */
-  static fromSheetName(fileId, sheetName) {
+  static fromSheetName(spreadsheet, sheetName) {
     try {
-      const sheet = fileId.getSheetByName(sheetName);
+      let sheet = spreadsheet.getSheetByName(sheetName);
 
       if (!sheet) {
         Logger.log("Sheet '" + sheetName + "' not found. Creating...");
-        sheet = fileId.insertSheet(sheetName);
+        sheet = spreadsheet.insertSheet(sheetName);
+        // **Header logic is now cleaner**
         sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
         Logger.log("Created new sheet and added header.");
-      }
-
-      if (sheet.getLastRow() === 0) {
+      } else if (sheet.getLastRow() === 0) {
         Logger.log(
           "Sheet '" + sheetName + "' exists but is empty. Adding header."
         );
         sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+      } else {
+        Logger.log("Found existing sheet: " + sheetName);
       }
 
-      Logger.log("Found existing sheet: " + sheetName);
-
       if (sheetName !== "Sheet1") {
-        const defaultSheet = fileId.getSheetByName("Sheet1");
+        const defaultSheet = spreadsheet.getSheetByName("Sheet1");
         if (defaultSheet) {
-          fileId.deleteSheet(defaultSheet);
+          spreadsheet.deleteSheet(defaultSheet);
           Logger.log("Removed default 'Sheet1'.");
         }
       }
-      return new Success(new MySheet(fileId, sheet));
+      // **Pass the full spreadsheet object, not just its ID**
+      return new Success(new MySheet(spreadsheet, sheet));
     } catch (e) {
       return new Failure(`Error in 'getSheet' ${e}`);
     }
   }
 
+  // ... saveFrom ... (This function is already correct from the fix)
   /**
    * Appends the complexity data to the sheet.
    * @param {Success<Complexity[]>|Failure} complexityResult
@@ -501,23 +491,20 @@ class MySheet {
    */
   saveFrom(complexityResult) {
     try {
-      // **FIX 1: Check if the *input* was a failure**
       if (complexityResult instanceof Failure) {
         Logger.log(`Skipping save: ${complexityResult.getMessage()}`);
         return new Failure(complexityResult.getError()); // Propagate the error
       }
 
-      // **FIX 2: Get the *value* (the array) from the Success object**
       const complexities = complexityResult.getValue();
 
       if (!complexities || complexities.length === 0) {
         Logger.log("No complexity data to save.");
-        return new Success(this); // Successful, but nothing to do
+        return new Success(this);
       }
 
-      const sheet = this.getSheet(); // this.sheet is a Sheet object
+      const sheet = this.getSheet();
 
-      // **FIX 3: Now map the 'complexities' array**
       const rowsToAdd = complexities.map((complexity) => {
         return [
           complexity.getTimestamp(),
@@ -534,15 +521,14 @@ class MySheet {
 
       sheet
         .getRange(
-          sheet.getLastRow() + 1, // Start row (next empty row)
-          1, // Start column
-          rowsToAdd.length, // Number of rows
-          rowsToAdd[0].length // Number of columns
+          sheet.getLastRow() + 1,
+          1,
+          rowsToAdd.length,
+          rowsToAdd[0].length
         )
         .setValues(rowsToAdd);
 
       Logger.log("Successfully saved " + rowsToAdd.length + " rows ");
-      // **FIX 4: Return a Success object for consistency**
       return new Success(this);
     } catch (e) {
       return new Failure(`Error in 'saveFrom': ${e.message}`);
