@@ -9,9 +9,9 @@ function main() {
     "https://lib.sejong.go.kr/main/site/sensor/traffic.do",
     apikey
   )
-    .bind((scrapper) => scrapper.isValidTime())
+    .bind((scrapper) => scrapper.hasValidTime())
     .bind((response) => Response.fromScraperAPI(response))
-    .bind((response) => response.isValidCode())
+    .bind((response) => response.hasValidCode())
     .bind((response) => Complexity.fromResponse(response));
 
   if (complexities instanceof Success) {
@@ -160,7 +160,7 @@ class ScraperAPI {
    * Checks time zone and returns self in a Success or a Failure.
    * @returns {Success<ScraperAPI>|Failure}
    */
-  isValidTime() {
+  hasValidTime() {
     const { dayOfWeek, hourOfDay } = ScraperAPI.getTime("Asia/Seoul");
 
     // Weekdays (Mon=1, Tue=2, Wed=3, Thu=4, Fri=5)
@@ -240,7 +240,7 @@ class Response {
    * Checks response code and returns self in a Success or a Failure.
    * @returns {Success<Response>|Failure}
    */
-  isValidCode() {
+  hasValidCode() {
     const code = this.getResponseCode();
     // [FIX 2] Corrected JavaScript for a range check.
     // The expression `200 <= code < 300` does not work as intended.
