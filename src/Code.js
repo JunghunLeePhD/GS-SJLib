@@ -125,18 +125,26 @@ class Failure {
   }
 }
 
-/**
- * ScraperAPI class, refactored to return Success or Failure.
- */
 class ScraperAPI {
-  constructor(timestamp, url, apiKey) {
+  // **IMPROVEMENT 1: Store all time info on the instance**
+  constructor(timestamp, dayOfWeek, hourOfDay, url, apiKey) {
     this.timestamp = timestamp;
+    this.dayOfWeek = dayOfWeek;
+    this.hourOfDay = hourOfDay;
     this.url = url;
     this.apiKey = apiKey;
   }
 
   getTimestamp() {
     return this.timestamp;
+  }
+
+  getDayOfWeek() {
+    return this.dayOfWeek;
+  }
+
+  getHourOfDay() {
+    return this.hourOfDay;
   }
 
   getUrl() {
@@ -148,13 +156,11 @@ class ScraperAPI {
   }
 
   /**
-   * A "monadic" constructor that returns a Success or Failure.
-   * @param {string} url The URL to scrape.
-   * @param {string} apiKey The ScraperAPI key.
    * @returns {Success<ScraperAPI>|Failure}
    */
   static fromApiKey(url, apiKey) {
-    const { timestamp } = ScraperAPI.getTime();
+    // **IMPROVEMENT 2: Get all time info at once**
+    const { timestamp, dayOfWeek, hourOfDay } = ScraperAPI.getTime();
 
     if (!apiKey || apiKey.trim() === "") {
       return new Failure("API key is missing or empty.");
@@ -163,33 +169,30 @@ class ScraperAPI {
       return new Failure("URL is missing or empty.");
     }
 
-    return new Success(new ScraperAPI(timestamp, url, apiKey));
+    // **Pass all time info to the constructor**
+    return new Success(
+      new ScraperAPI(timestamp, dayOfWeek, hourOfDay, url, apiKey)
+    );
   }
 
   /**
-   * Checks time zone and returns self in a Success or a Failure.
+   * **IMPROVEMENT 3: Use instance properties and simplify logic**
    * @returns {Success<ScraperAPI>|Failure}
    */
   hasValidTime() {
-    const { dayOfWeek, hourOfDay } = ScraperAPI.getTime("Asia/Seoul");
+    // **Get time info from 'this' instead of calling getTime() again**
+    const { dayOfWeek, hourOfDay } = this;
 
-    // Weekdays (Mon=1, Tue=2, Wed=3, Thu=4, Fri=5)
-    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-      if (hourOfDay >= 9 && hourOfDay <= 21) {
-        return new Success(this);
-      }
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+    const isWeekdayTime = isWeekday && hourOfDay >= 9 && hourOfDay <= 21;
+
+    const isWeekend = dayOfWeek === 6 || dayOfWeek === 7;
+    const isWeekendTime = isWeekend && hourOfDay >= 9 && hourOfDay <= 17;
+
+    // **Flattened boolean logic is easier to read**
+    if (isWeekdayTime || isWeekendTime) {
+      return new Success(this);
     }
-
-    // Weekends (Sat=6, Sun=7)
-    if (dayOfWeek === 6 || dayOfWeek === 7) {
-      if (hourOfDay >= 9 && hourOfDay <= 17) {
-        return new Success(this);
-      }
-    }
-
-    // Note: Google's 'u' format is 1-7 for Mon-Sun.
-    // If you were using 'c', it would be 2-6 for Mon-Fri and 7/1 for Sat/Sun.
-    // 'u' is correct here.
 
     return new Failure(
       `Outside of scheduled KST hours (Day: ${dayOfWeek}, Hour: ${hourOfDay}).`
@@ -198,12 +201,7 @@ class ScraperAPI {
 
   /**
    * Gets the current time details for a specific time zone.
-   * @param {string} timeZone e.g., "Asia/Seoul" or "America/New_York"
    * @returns {{timestamp: string, dayOfWeek: number, hourOfDay: number}}
-   * An object containing:
-   * - timestamp: Formatted string (yyyy-MM-dd_HH-mm-ss)
-   * - dayOfWeek: Day of the week (1=Mon, 7=Sun)
-   * - hourOfDay: Hour of the day (0-23)
    */
   static getTime() {
     const now = new Date();
