@@ -4,7 +4,7 @@
  * Run this using 'clasp run setupTrigger'.
  */
 function setupTrigger() {
-  var functionToRun = "saveHtmlToDriveInFolder";
+  var functionToRun = "main";
 
   // 1. Delete all existing triggers for this function to prevent duplicates
   var allTriggers = ScriptApp.getProjectTriggers();
@@ -18,7 +18,7 @@ function setupTrigger() {
   // 2. Create the new 30-minute trigger
   ScriptApp.newTrigger(functionToRun)
     .timeBased()
-    .everyMinutes(15) // <-- You can change this to 15 if you want
+    .everyMinutes(30) // <-- You can change this to 15 if you want
     .create();
 
   Logger.log("Successfully created new trigger for " + functionToRun);
