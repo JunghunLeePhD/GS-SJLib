@@ -193,9 +193,39 @@
           const hourStr = String(h).padStart(2, "0");
           return { value: h, text: `${hourStr}:00` };
         });
-        populateSelect("filter-hour", formattedHours, true);
+        populateSelect("filter-hour", formattedHours, true); // --- NEW: Set default hour ---
 
-        // Draw the charts
+        // --- NEW: Set default day and hour ---
+        try {
+          const now = new Date();
+          const dayNames = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+          ];
+          const currentDayName = dayNames[now.getDay()]; // Set default day
+          const daySelect = document.getElementById("filter-day"); // Your 'data.filters.days' array already includes all 7 days
+          if (data.filters.days.includes(currentDayName)) {
+            daySelect.value = currentDayName;
+          } // Set default hour (from previous step)
+
+          const currentHour = now.getHours();
+          const targetHour = (currentHour + 1) % 24; // e.g., 16:47 -> 17
+          const hourSelect = document.getElementById("filter-hour");
+
+          if (data.filters.hours.includes(targetHour)) {
+            hourSelect.value = targetHour;
+          } else if (data.filters.hours.includes(currentHour)) {
+            hourSelect.value = currentHour;
+          }
+        } catch (e) {
+          console.error("Could not set default day/hour:", e);
+          section;
+        } // --- END NEW ---
         drawBarChart(data.barChartData);
         drawTimeSeriesChart(data.timeSeriesChartData);
 
