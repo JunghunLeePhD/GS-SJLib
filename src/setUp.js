@@ -4,6 +4,7 @@
  * Run this using 'clasp run setupTrigger'.
  */
 function setupTrigger() {
+  main();
   var functionToRun = "main";
 
   // 1. Delete all existing triggers for this function to prevent duplicates
