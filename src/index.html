@@ -2,9 +2,7 @@
 <html>
   <head>
     <base target="_top" />
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Google Charts -->
     <script
       type="text/javascript"
       src="https://www.gstatic.com/charts/loader.js"
@@ -50,14 +48,11 @@
     </div>
 
     <div id="app-content" class="max-w-7xl mx-auto hidden">
-      <!-- Header -->
       <h1 class="text-3xl font-bold text-gray-800 mb-6">
         Library Complexity Dashboard
       </h1>
 
-      <!-- Top Row: Prediction & Time Series -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <!-- Prediction Panel -->
         <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md">
           <h2 class="text-xl font-semibold text-gray-700 mb-4">
             Make a Prediction
@@ -68,15 +63,14 @@
           </p>
 
           <div class="space-y-4">
-            <!-- --- UPDATED: Removed Floor and Location, added Combined Location --- -->
             <div>
               <label
-                for="filter-combined-location"
+                for="filter-location"
                 class="block text-sm font-medium text-gray-700"
-                >Location (Floor)</label
+                >Location</label
               >
               <select
-                id="filter-combined-location"
+                id="filter-location"
                 class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
               ></select>
             </div>
@@ -124,7 +118,6 @@
           </div>
         </div>
 
-        <!-- Time Series Analysis Panel -->
         <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
           <h2 class="text-xl font-semibold text-gray-700 mb-4">
             Time Series Analysis: Average Complexity by Hour
@@ -134,13 +127,11 @@
             percentage of locations marked "Moderate" (보통) or "Congested"
             (혼잡) at any given hour.
           </p>
-          <!-- THIS IS THE CHANGE -->
-          <div id="timeseries-chart-div" class="w-full h-[32rem]"></div>
+          <div id="timeseries-chart-div" class="w-full h-96"></div>
           <p id="timeseries-chart-error" class="text-red-500 hidden"></p>
         </div>
       </div>
 
-      <!-- Bottom Row: Bar Chart -->
       <div class="bg-white p-6 rounded-lg shadow-md">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">
           Historical Status by Location
@@ -149,8 +140,7 @@
           This chart shows the total counts of all three statuses recorded for
           each location.
         </p>
-        <!-- THIS IS THE CHANGE -->
-        <div id="barchart-div" class="w-full h-[32rem]"></div>
+        <div id="barchart-div" class="w-full h-96"></div>
         <p id="barchart-error" class="text-red-500 hidden"></p>
       </div>
     </div>
@@ -177,7 +167,13 @@
           return;
         }
 
-        if (!data.filters || data.filters.floors.length === 0) {
+        // --- FIXED ---
+        // Changed check to use 'locations' which is data we actually use
+        if (
+          !data.filters ||
+          !data.filters.locations ||
+          data.filters.locations.length === 0
+        ) {
           onFailure({
             message:
               "No data was processed. Please check your spreadsheet data format and Apps Script logs for errors.",
@@ -188,11 +184,9 @@
         globalData = data;
 
         // Populate filter dropdowns
-        // --- UPDATED ---
-        populateSelect(
-          "filter-combined-location",
-          data.filters.combinedLocations
-        );
+        // --- FIXED ---
+        // Removed the broken line: populateSelect("filter-floor", data.filters.floors);
+        populateSelect("filter-location", data.filters.locations);
         populateSelect("filter-day", data.filters.days);
 
         const formattedHours = data.filters.hours.map((h) => {
@@ -251,8 +245,7 @@
           chartArea: { width: "60%" },
           isStacked: true,
           hAxis: { title: "Total Count", minValue: 0 },
-          // --- UPDATED ---
-          vAxis: { title: "Location (Floor)" },
+          vAxis: { title: "Location" },
           // Colors for Smooth (Green), Moderate (Amber), Congested (Red)
           colors: ["#6EE7B7", "#FBBF24", "#EF4444"],
         };
@@ -298,38 +291,17 @@
        * Handles the prediction logic (now finds the max of 3 statuses)
        */
       function handlePrediction() {
-        // --- UPDATED ---
-        const combinedLocation = document.getElementById(
-          "filter-combined-location"
-        ).value;
+        // --- FIXED ---
+        // Removed the broken line: const floor = document.getElementById("filter-floor").value;
+        const location = document.getElementById("filter-location").value;
         const day = document.getElementById("filter-day").value;
         const hour = document.getElementById("filter-hour").value;
 
-        // Parse the combinedLocation string back into its parts
-        // Uses regex to capture "Location Name" and "Floor"
-        // e.g., "어린이자료실 (1F)" -> location="어린이자료실", floor="1F"
-        const regex = /(.+) \((.+)\)$/;
-        const match = combinedLocation.match(regex);
+        const modelKey = `${location}|${day}|${hour}`;
 
         const resultDiv = document.getElementById("prediction-result");
         const resultText = document.getElementById("result-text");
         const resultSubtext = document.getElementById("result-subtext");
-
-        if (!match) {
-          resultText.textContent = "Error";
-          resultText.className = "text-xl text-center font-bold text-red-600";
-          resultSubtext.textContent =
-            "Could not parse location. Please try again.";
-          resultDiv.classList.remove("hidden");
-          console.error("Could not parse combinedLocation:", combinedLocation);
-          return;
-        }
-
-        const location = match[1];
-        const floor = match[2];
-        // --- END UPDATE ---
-
-        const modelKey = `${floor}|${location}|${day}|${hour}`;
 
         if (!globalData || !globalData.predictionModel) {
           onFailure({ message: "Prediction model not loaded." });

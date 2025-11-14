@@ -411,13 +411,13 @@ class MySheet {
         Logger.log("Sheet '" + sheetName + "' not found. Creating...");
         sheet = spreadsheet.insertSheet(sheetName);
         // **Header logic is now cleaner**
-        sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+        sheet.appendRow(["Timestamp", "Location", "Status"]);
         Logger.log("Created new sheet and added header.");
       } else if (sheet.getLastRow() === 0) {
         Logger.log(
           "Sheet '" + sheetName + "' exists but is empty. Adding header."
         );
-        sheet.appendRow(["Timestamp", "Floor", "Location", "Status"]);
+        sheet.appendRow(["Timestamp", "Location", "Status"]);
       } else {
         Logger.log("Found existing sheet: " + sheetName);
       }
@@ -461,8 +461,7 @@ class MySheet {
       const rowsToAdd = complexities.map((complexity) => {
         return [
           complexity.getTimestamp(),
-          complexity.getFloor(),
-          complexity.getLocation(),
+          `${complexity.getLocation()} (${complexity.getFloor()})`,
           complexity.getStatus(),
         ];
       });
