@@ -39,7 +39,6 @@ function getSheetData() {
     const predictionModel = {};
     const hourlyComplexity = {}; // For time series
 
-    const uniqueFloors = new Set();
     const uniqueLocations = new Set();
     const uniqueDays = new Set([
       "Sunday",
@@ -57,12 +56,11 @@ function getSheetData() {
     data.forEach((row, index) => {
       try {
         const timestampCell = row[0];
-        const floor = row[1] ? row[1].trim() : null;
-        const location = row[2] ? row[2].trim() : null;
-        const status = row[3] ? row[3].trim() : null;
+        const location = row[1] ? row[1].trim() : null;
+        const status = row[2] ? row[2].trim() : null;
 
         // Skip row if key data is missing
-        if (!timestampCell || !floor || !location || !status) {
+        if (!timestampCell || !location || !status) {
           Logger.log(`Skipping row ${index + 2}: Missing data.`);
           return;
         }
@@ -141,7 +139,6 @@ function getSheetData() {
         ][dayOfWeek];
         const hour = date.getHours();
 
-        uniqueFloors.add(floor);
         uniqueLocations.add(location);
         uniqueHours.add(hour);
 
@@ -156,7 +153,7 @@ function getSheetData() {
         chartData[location]["total"]++;
 
         // b) Populate Prediction Model
-        const modelKey = `${floor}|${location}|${dayName}|${hour}`;
+        const modelKey = `${location}|${dayName}|${hour}`;
         if (!predictionModel[modelKey])
           predictionModel[modelKey] = { 원활: 0, 보통: 0, 혼잡: 0, total: 0 };
         if (status === "원활") predictionModel[modelKey]["원활"]++;
@@ -229,7 +226,6 @@ function getSheetData() {
       timeSeriesChartData: timeSeriesChartData,
       predictionModel: predictionModel,
       filters: {
-        floors: Array.from(uniqueFloors),
         locations: Array.from(uniqueLocations),
         days: Array.from(uniqueDays),
         hours: sortedHours,
