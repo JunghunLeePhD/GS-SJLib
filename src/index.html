@@ -359,26 +359,35 @@
           return;
         }
 
-        // --- MODIFIED: Process data for Chart.js ---
+        // --- Process data for Chart.js ---
         const labels = [];
         const percentageData = [];
 
-        // Start at 1 to skip header row
         for (let i = 1; i < chartData.length; i++) {
           const hour = chartData[i][0];
           const percentage = chartData[i][1];
-
           labels.push(hour);
 
-          // If percentage is 0, push null to create a gap in the chart
-          // This assumes 0% means "no data" or "closed"
           if (percentage === 0) {
             percentageData.push(null);
           } else {
             percentageData.push(percentage);
           }
         }
-        // --- END OF MODIFICATION ---
+
+        // --- NEW: DYNAMIC Y-AXIS CALCULATION ---
+
+        // 1. Find the highest data point (filtering out 'null' values)
+        const dataMax = Math.max(...percentageData.filter((v) => v !== null));
+
+        // 2. Calculate a new ceiling, 10% above the max, rounded to the nearest 10.
+        // (e.g., if max is 30, new ceiling is 40. If max is 32, new ceiling is 50)
+        let newYAxisMax = Math.ceil(dataMax / 10) * 10 + 10;
+
+        // 3. Ensure the max is never more than 100
+        newYAxisMax = Math.min(newYAxisMax, 100);
+
+        // --- END OF NEW CALCULATION ---
 
         const ctx = document
           .getElementById("timeSeriesCanvas")
@@ -409,7 +418,8 @@
               y: {
                 title: { display: true, text: "Not Smooth % (Mod/Congested)" },
                 min: 0,
-                max: 100,
+                // 4. Use the new dynamic max instead of 100
+                max: newYAxisMax,
                 // Adds the '%' symbol to the Y-axis ticks
                 ticks: {
                   callback: function (value, index, values) {
@@ -430,7 +440,6 @@
           },
         });
       }
-
       /**
        * Handles the prediction logic (unchanged)
        */
