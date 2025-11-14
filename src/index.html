@@ -3,12 +3,11 @@
   <head>
     <base target="_top" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script
-      type="text/javascript"
-      src="https://www.gstatic.com/charts/loader.js"
-    ></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-      /* Simple loader */
+      /* Simple loader (unchanged) */
       #loader {
         border: 8px solid #f3f3f3;
         border-top: 8px solid #3498db;
@@ -120,14 +119,18 @@
 
         <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
           <h2 class="text-xl font-semibold text-gray-700 mb-4">
-            Time Series Analysis: Average Complexity by Hour
+            Average Complexity by Hour
           </h2>
           <p class="text-sm text-gray-600 mb-4">
             This line chart shows the overall library "rhythm." It's the average
             percentage of locations marked "Moderate" (보통) or "Congested"
             (혼잡) at any given hour.
           </p>
-          <div id="timeseries-chart-div" class="w-full h-96"></div>
+
+          <div id="timeseries-chart-div" class="w-full h-96">
+            <canvas id="timeSeriesCanvas"></canvas>
+          </div>
+
           <p id="timeseries-chart-error" class="text-red-500 hidden"></p>
         </div>
       </div>
@@ -140,7 +143,10 @@
           This chart shows the total counts of all three statuses recorded for
           each location.
         </p>
-        <div id="barchart-div" class="w-full h-96"></div>
+
+        <div id="barchart-div" class="w-full">
+          <canvas id="barChartCanvas"></canvas>
+        </div>
         <p id="barchart-error" class="text-red-500 hidden"></p>
       </div>
     </div>
@@ -148,8 +154,9 @@
     <script>
       let globalData = null;
 
-      google.charts.load("current", { packages: ["corechart", "bar"] });
-      google.charts.setOnLoadCallback(loadData);
+      // 3. REMOVED: Google Charts loaders
+      // google.charts.load("current", { packages: ["corechart", "bar"] });
+      // google.charts.setOnLoadCallback(loadData);
 
       function loadData() {
         console.log("Requesting data from server...");
@@ -167,8 +174,6 @@
           return;
         }
 
-        // --- FIXED ---
-        // Changed check to use 'locations' which is data we actually use
         if (
           !data.filters ||
           !data.filters.locations ||
@@ -183,9 +188,6 @@
 
         globalData = data;
 
-        // Populate filter dropdowns
-        // --- FIXED ---
-        // Removed the broken line: populateSelect("filter-floor", data.filters.floors);
         populateSelect("filter-location", data.filters.locations);
         populateSelect("filter-day", data.filters.days);
 
@@ -193,9 +195,8 @@
           const hourStr = String(h).padStart(2, "0");
           return { value: h, text: `${hourStr}:00` };
         });
-        populateSelect("filter-hour", formattedHours, true); // --- NEW: Set default hour ---
+        populateSelect("filter-hour", formattedHours, true);
 
-        // --- NEW: Set default day and hour ---
         try {
           const now = new Date();
           const dayNames = [
@@ -207,14 +208,14 @@
             "Friday",
             "Saturday",
           ];
-          const currentDayName = dayNames[now.getDay()]; // Set default day
-          const daySelect = document.getElementById("filter-day"); // Your 'data.filters.days' array already includes all 7 days
+          const currentDayName = dayNames[now.getDay()];
+          const daySelect = document.getElementById("filter-day");
           if (data.filters.days.includes(currentDayName)) {
             daySelect.value = currentDayName;
-          } // Set default hour (from previous step)
+          }
 
           const currentHour = now.getHours();
-          const targetHour = (currentHour + 1) % 24; // e.g., 16:47 -> 17
+          const targetHour = (currentHour + 1) % 24;
           const hourSelect = document.getElementById("filter-hour");
 
           if (data.filters.hours.includes(targetHour)) {
@@ -224,8 +225,9 @@
           }
         } catch (e) {
           console.error("Could not set default day/hour:", e);
-          section;
-        } // --- END NEW ---
+        }
+
+        // Call the new Chart.js functions
         drawBarChart(data.barChartData);
         drawTimeSeriesChart(data.timeSeriesChartData);
 
@@ -237,6 +239,7 @@
       }
 
       function populateSelect(elementId, options, isObject = false) {
+        // ... (This function is unchanged)
         const select = document.getElementById(elementId);
         select.innerHTML = "";
 
@@ -259,7 +262,7 @@
       }
 
       /**
-       * Draws the Bar Chart with 3 statuses
+       * 4. REWRITTEN: Draws the Bar Chart with Chart.js
        */
       function drawBarChart(chartData) {
         if (!chartData || chartData.length <= 1) {
@@ -269,24 +272,82 @@
           return;
         }
 
-        const data = google.visualization.arrayToDataTable(chartData);
-        const options = {
-          title: "Status Counts by Location",
-          chartArea: { width: "60%" },
-          isStacked: true,
-          hAxis: { title: "Total Count", minValue: 0 },
-          vAxis: { title: "Location" },
-          // Colors for Smooth (Green), Moderate (Amber), Congested (Red)
-          colors: ["#6EE7B7", "#FBBF24", "#EF4444"],
-        };
-        const chart = new google.visualization.BarChart(
-          document.getElementById("barchart-div")
-        );
-        chart.draw(data, options);
+        // --- This is your dynamic height calculation (unchanged) ---
+        // It works by setting the height of the PARENT div.
+        const numberOfRows = chartData.length - 1; // -1 for header row
+        const rowHeight = 30; // 30px per bar (you can adjust this)
+        const chartChromeHeight = 120; // Extra space for title, legend, axis
+        const newHeight = numberOfRows * rowHeight + chartChromeHeight;
+
+        const chartDiv = document.getElementById("barchart-div");
+        chartDiv.style.height = newHeight + "px";
+        // --- End of dynamic height calculation ---
+
+        // Process data for Chart.js
+        const labels = [];
+        const smoothData = [];
+        const moderateData = [];
+        const congestedData = [];
+
+        // Start at 1 to skip header row
+        for (let i = 1; i < chartData.length; i++) {
+          labels.push(chartData[i][0]);
+          smoothData.push(chartData[i][1]);
+          moderateData.push(chartData[i][2]);
+          congestedData.push(chartData[i][3]);
+        }
+
+        // Get the canvas
+        const ctx = document.getElementById("barChartCanvas").getContext("2d");
+
+        new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Smooth", // Corresponds to chartData[0][1]
+                data: smoothData,
+                backgroundColor: "#6EE7B7", // Your original color
+              },
+              {
+                label: "Moderate", // Corresponds to chartData[0][2]
+                data: moderateData,
+                backgroundColor: "#FBBF24", // Your original color
+              },
+              {
+                label: "Congested", // Corresponds to chartData[0][3]
+                data: congestedData,
+                backgroundColor: "#EF4444", // Your original color
+              },
+            ],
+          },
+          options: {
+            indexAxis: "y", // This makes it a horizontal bar chart
+            responsive: true, // This makes it fill the container
+            maintainAspectRatio: false, // IMPORTANT: This lets it fill the dynamic height
+            scales: {
+              x: {
+                stacked: true, // Stacks the bars
+                title: { display: true, text: "Total Count" },
+              },
+              y: {
+                stacked: true, // Stacks the bars
+                title: { display: true, text: "Location" },
+              },
+            },
+            plugins: {
+              title: {
+                display: true,
+                text: "Status Counts by Location",
+              },
+            },
+          },
+        });
       }
 
       /**
-       * Draws the Time Series Line Chart
+       * 5. REWRITTEN: Draws the Time Series Line Chart with Chart.js
        */
       function drawTimeSeriesChart(chartData) {
         if (!chartData || chartData.length <= 1) {
@@ -298,31 +359,83 @@
           return;
         }
 
-        const data = google.visualization.arrayToDataTable(chartData);
-        const options = {
-          title: "Average Library Complexity by Hour",
-          hAxis: { title: "Hour of Day" },
-          vAxis: {
-            title: "Not Smooth % (Mod/Congested)",
-            minValue: 0,
-            maxValue: 100,
-            format: "#'%'",
+        // --- MODIFIED: Process data for Chart.js ---
+        const labels = [];
+        const percentageData = [];
+
+        // Start at 1 to skip header row
+        for (let i = 1; i < chartData.length; i++) {
+          const hour = chartData[i][0];
+          const percentage = chartData[i][1];
+
+          labels.push(hour);
+
+          // If percentage is 0, push null to create a gap in the chart
+          // This assumes 0% means "no data" or "closed"
+          if (percentage === 0) {
+            percentageData.push(null);
+          } else {
+            percentageData.push(percentage);
+          }
+        }
+        // --- END OF MODIFICATION ---
+
+        const ctx = document
+          .getElementById("timeSeriesCanvas")
+          .getContext("2d");
+
+        new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Not Smooth %",
+                data: percentageData,
+                borderColor: "#4F46E5", // Your original color
+                backgroundColor: "#4F46E5",
+                fill: false,
+                tension: 0.1, // Makes the line slightly curved
+              },
+            ],
           },
-          legend: { position: "none" },
-          colors: ["#4F46E5"], // Indigo-600
-        };
-        const chart = new google.visualization.LineChart(
-          document.getElementById("timeseries-chart-div")
-        );
-        chart.draw(data, options);
+          options: {
+            responsive: true,
+            maintainAspectRatio: false, // Fills the h-96 div
+            scales: {
+              x: {
+                title: { display: true, text: "Hour of Day" },
+              },
+              y: {
+                title: { display: true, text: "Not Smooth % (Mod/Congested)" },
+                min: 0,
+                max: 100,
+                // Adds the '%' symbol to the Y-axis ticks
+                ticks: {
+                  callback: function (value, index, values) {
+                    return value + "%";
+                  },
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: false, // Hides the legend
+              },
+              title: {
+                display: true,
+                text: "Average Library Complexity by Hour",
+              },
+            },
+          },
+        });
       }
 
       /**
-       * Handles the prediction logic (now finds the max of 3 statuses)
+       * Handles the prediction logic (unchanged)
        */
       function handlePrediction() {
-        // --- FIXED ---
-        // Removed the broken line: const floor = document.getElementById("filter-floor").value;
+        // ... (This function is unchanged)
         const location = document.getElementById("filter-location").value;
         const day = document.getElementById("filter-day").value;
         const hour = document.getElementById("filter-hour").value;
@@ -341,7 +454,6 @@
         const modelEntry = globalData.predictionModel[modelKey];
 
         if (modelEntry) {
-          // Find the status with the highest count
           const statuses = [
             {
               name: "혼잡 (Congested)",
@@ -360,7 +472,6 @@
             },
           ];
 
-          // Sort to find the highest
           statuses.sort((a, b) => b.count - a.count);
           const bestPrediction = statuses[0];
 
@@ -384,10 +495,14 @@
       }
 
       function onFailure(error) {
+        // ... (This function is unchanged)
         console.error("Failed to load:", error);
         const loaderContainer = document.getElementById("loader-container");
         loaderContainer.innerHTML = `<div class="text-red-600 font-bold p-8 bg-white rounded shadow-md">Error: ${error.message}. <br><br>Please check the following: <br>1. The spreadsheet name is exactly 'SJCityLib'. <br>2. The sheet name is exactly 'Complexity'. <br>3. Check the Apps Script "Executions" log for more details.</div>`;
       }
+
+      // 6. ADDED: This starts the app, replacing the Google Charts loader
+      window.addEventListener("DOMContentLoaded", loadData);
     </script>
   </body>
 </html>
